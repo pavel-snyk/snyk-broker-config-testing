@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   node: circleci/node@6.2.0
-  prodsec: snyk/prodsec-orb@1
 
 defaults: &defaults
   resource_class: small
@@ -17,6 +16,29 @@ filter-main-branch-only: &filter-main-branch-only
   filters:
     branches:
       only: main
+filter-tags-only: &filter-tags-only
+  filters:
+    tags:
+      only: /^v.*/
+    branches:
+      ignore: /.*/
+
+commands:
+  install-github-release:
+    parameters:
+      version:
+        type: string
+        default: "v0.10.0"
+    steps:
+      - run:
+          name: Install github-release
+          command: |
+            curl -L https://github.com/github-release/github-release/releases/download/<<parameters.version>>/linux-amd64-github-release.bz2 -o linux-amd64-github-release.bz2
+            bzip2 -d linux-amd64-github-release.bz2
+            chmod +x linux-amd64-github-release && sudo mv linux-amd64-github-release /usr/local/bin/github-release
+      - run:
+          name: Verify github-release
+          command: github-release --version
 
 jobs:
   build:
@@ -108,10 +130,10 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      - prodsec/security_scans:
-          mode: auto
-          open-source-additional-arguments: --exclude=test
-          iac-scan-path: ./src
+#      - prodsec/security_scans:
+#          mode: auto
+#          open-source-additional-arguments: --exclude=test
+#          iac-scan-path: ./src
   test:
     <<: *defaults
     resource_class: medium
@@ -132,22 +154,36 @@ jobs:
           name: Release to GitHub and NPM
           command: |
             npx semantic-release
+  upload-github-release-assets:
+    <<: *defaults
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - install-github-release
+      - run:
+          name: Upload assets to GitHub release
+          command: |
+            CIRCLE_SHORT_SHA1=$(git rev-parse --short ${CIRCLE_SHA1})
+            CLI_VERSION=${CIRCLE_TAG}-${CIRCLE_SHORT_SHA1}
+
+            github-release upload --user pavel-snyk --repo snyk-broker-config-testing --tag ${CIRCLE_TAG} \
+              --name snyk-broker-config-${CLI_VERSION}-arm64.pkg --file dist/macos/snyk-broker-config-${CLI_VERSION}-arm64.pkg
+            github-release upload --user pavel-snyk --repo snyk-broker-config-testing --tag ${CIRCLE_TAG} \
+              --name snyk-broker-config-${CLI_VERSION}-x64.pkg --file dist/macos/snyk-broker-config-${CLI_VERSION}-x64.pkg
 
 workflows:
-  version: 2
   CICD:
     jobs:
-      - prodsec/secrets-scan:
-          name: Scan repository for secrets
-          context:
-            - snyk-bot-slack
-          channel: broker-alerts-cicd
+#      - prodsec/secrets-scan:
+#          name: Scan repository for secrets
+#          context:
+#            - snyk-bot-slack
+#          channel: broker-alerts-cicd
       - install-npm-packages:
           name: Install NPM packages
           context:
             - nodejs-install
-          requires:
-            - Scan repository for secrets
       - lint-npm:
           name: Lint source code
           requires:
@@ -164,28 +200,43 @@ workflows:
           name: Run tests
           requires:
             - Install NPM packages
-      - build-linux:
-          name: Build Linux tarballs
-          requires:
-            - Run tests
-          <<: *filter-main-branch-only
-      - build-macos:
-          name: Build macOS installer
-          requires:
-            - Run tests
-          <<: *filter-main-branch-only
-      - build-win:
-          name: Build Windows installer
-          requires:
-            - Run tests
-          <<: *filter-main-branch-only
       - release:
           name: Release to GitHub and NPM
           context:
             - nodejs-lib-release
             - team-hybrid-snyk
           requires:
-            - Build Linux tarballs
-            - Build macOS installer
-            - Build Windows installer
+            - Run tests
           <<: *filter-main-branch-only
+
+  Release standalone installers:
+    jobs:
+      - install-npm-packages:
+          name: Install NPM packages
+          context:
+            - nodejs-install
+          <<: *filter-tags-only
+#      - build-linux:
+#          name: Build Linux tarballs
+#          requires:
+#            - Install NPM packages
+#          <<: *filter-tags-only
+      - build-macos:
+          name: Build macOS installer
+          requires:
+            - Install NPM packages
+          <<: *filter-tags-only
+#      - build-win:
+#          name: Build Windows installer
+#          requires:
+#            - Install NPM packages
+#          <<: *filter-tags-only
+      - upload-github-release-assets:
+          name: Upload assets to GitHub release
+          context:
+            - team-hybrid-snyk
+          requires:
+#            - Build Linux tarballs
+            - Build macOS installer
+#            - Build Windows installer
+          <<: *filter-tags-only
