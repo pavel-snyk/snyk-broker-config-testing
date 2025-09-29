@@ -112,7 +112,6 @@
     "pack:linux": "oclif pack deb",
     "pack:macos": "oclif pack macos",
     "pack:win": "oclif pack win",
-    "version": "oclif readme && git add README.md",
     "format": "prettier --write '{src,test}/**/*.{js,ts}'"
   },
   "types": "dist/index.d.ts"
