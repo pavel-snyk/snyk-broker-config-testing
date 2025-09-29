@@ -241,6 +241,7 @@ workflows:
           context:
             - nodejs-lib-release
             - platformeng_access
+            - team-hybrid-snyk
           requires:
             - Run tests
           <<: *filter-main-branch-only
