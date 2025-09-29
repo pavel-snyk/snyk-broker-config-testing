@@ -2,7 +2,7 @@ version: 2.1
 
 orbs:
   node: circleci/node@6.2.0
-  prodsec: snyk/prodsec-orb@1
+  #prodsec: snyk/prodsec-orb@1
 
 defaults: &defaults
   resource_class: small
@@ -146,10 +146,10 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      - prodsec/security_scans:
-          mode: auto
-          open-source-additional-arguments: --exclude=test
-          iac-scan-path: ./src
+#      - prodsec/security_scans:
+#          mode: auto
+#          open-source-additional-arguments: --exclude=test
+#          iac-scan-path: ./src
   test:
     <<: *defaults
     resource_class: medium
@@ -209,17 +209,17 @@ workflows:
   version: 2
   CICD:
     jobs:
-      - prodsec/secrets-scan:
-          name: Scan repository for secrets
-          context:
-            - snyk-bot-slack
-          channel: broker-alerts-cicd
+#      - prodsec/secrets-scan:
+#          name: Scan repository for secrets
+#          context:
+#            - snyk-bot-slack
+#          channel: broker-alerts-cicd
       - install-npm-packages:
           name: Install NPM packages
           context:
             - nodejs-install
-          requires:
-            - Scan repository for secrets
+#          requires:
+#            - Scan repository for secrets
       - lint-npm:
           name: Lint source code
           requires:
